@@ -13,10 +13,11 @@ test("matchClients supports multiple hints and deduplicates", () => {
   const result = matchClients(clients, ["room", "office"]);
 
   assert.equal(result.unmatched.length, 0);
-  assert.deepEqual(
-    result.selected.map((client) => client.machineIdentifier).sort(),
-    ["A", "B", "C"],
-  );
+  assert.deepEqual(result.selected.map((client) => client.machineIdentifier).sort(), [
+    "A",
+    "B",
+    "C",
+  ]);
 });
 
 test("matchClients reports unmatched hints", () => {

@@ -80,14 +80,18 @@ async function loadEnvValues(filePath) {
 }
 
 function parseBooleanInput(value, fallback = "true") {
-  const normalized = String(value ?? fallback).trim().toLowerCase();
+  const normalized = String(value ?? fallback)
+    .trim()
+    .toLowerCase();
   if (TRUE_VALUES.has(normalized)) return "true";
   if (FALSE_VALUES.has(normalized)) return "false";
   return null;
 }
 
 function normalize(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function uniqueTitles(items) {
@@ -255,7 +259,11 @@ async function main() {
   try {
     section("Plex Collection Shuffler Setup");
     console.log(info("Interactive configuration wizard"));
-    console.log(muted("Press Enter to accept defaults. For discovered options, you can type a name or its number."));
+    console.log(
+      muted(
+        "Press Enter to accept defaults. For discovered options, you can type a name or its number.",
+      ),
+    );
     console.log("");
 
     section("Connection");
@@ -306,17 +314,26 @@ async function main() {
     );
 
     let collections = [];
-    const selectedSection = sections.find((section) => normalize(section.title) === normalize(values.PLEX_LIBRARY));
+    const selectedSection = sections.find(
+      (section) => normalize(section.title) === normalize(values.PLEX_LIBRARY),
+    );
     if (selectedSection) {
       try {
         collections = await plex.listCollections(selectedSection.key);
-        printOptions("collections", uniqueTitles(collections.map((collection) => collection.title)));
+        printOptions(
+          "collections",
+          uniqueTitles(collections.map((collection) => collection.title)),
+        );
       } catch (error) {
         console.warn(warn(`Warning: could not load collections (${error.message})`));
         console.log("");
       }
     } else if (sections.length > 0) {
-      console.warn(warn("Warning: selected library did not match discovered libraries; skipping collection discovery."));
+      console.warn(
+        warn(
+          "Warning: selected library did not match discovered libraries; skipping collection discovery.",
+        ),
+      );
       console.log("");
     }
 

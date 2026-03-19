@@ -111,7 +111,10 @@ export class PlexApi {
     };
   }
 
-  async request(path, { method = "GET", headers = {}, baseUrl = this.plexUrl, token = this.plexToken } = {}) {
+  async request(
+    path,
+    { method = "GET", headers = {}, baseUrl = this.plexUrl, token = this.plexToken } = {},
+  ) {
     const url = new URL(path, `${baseUrl}/`);
     const response = await fetch(url, {
       method,
@@ -253,7 +256,9 @@ export class PlexApi {
     const sections = await this.listLibrarySections();
 
     const normalized = sectionName.trim().toLowerCase();
-    const match = sections.find((section) => (section.title || "").trim().toLowerCase() === normalized);
+    const match = sections.find(
+      (section) => (section.title || "").trim().toLowerCase() === normalized,
+    );
 
     if (!match) {
       const available = sections.map((section) => section.title).filter(Boolean);
@@ -270,13 +275,15 @@ export class PlexApi {
     const collections = await this.listCollections(sectionKey);
 
     const normalized = collectionName.trim().toLowerCase();
-    const match = collections.find((collection) =>
-      (collection.title || "").trim().toLowerCase() === normalized,
+    const match = collections.find(
+      (collection) => (collection.title || "").trim().toLowerCase() === normalized,
     );
 
     if (!match) {
       const available = collections.map((collection) => collection.title).filter(Boolean);
-      throw new Error(`Collection not found: ${collectionName}. Available: ${available.join(", ")}`);
+      throw new Error(
+        `Collection not found: ${collectionName}. Available: ${available.join(", ")}`,
+      );
     }
 
     return {
@@ -297,7 +304,10 @@ export class PlexApi {
     return containerItems(container).filter((item) => item.type === "episode");
   }
 
-  async createPlayQueue(serverIdentity, { collectionKey, episodeKey, startEpisodeKey, shuffleContinuous = true }) {
+  async createPlayQueue(
+    serverIdentity,
+    { collectionKey, episodeKey, startEpisodeKey, shuffleContinuous = true },
+  ) {
     const params = new URLSearchParams({ type: "video" });
 
     if (shuffleContinuous) {
@@ -309,7 +319,10 @@ export class PlexApi {
       params.set("continuous", "1");
       params.set("key", startEpisodeKey || episodeKey);
     } else {
-      params.set("uri", `server://${serverIdentity.machineIdentifier}/${serverIdentity.libraryIdentifier}${episodeKey}`);
+      params.set(
+        "uri",
+        `server://${serverIdentity.machineIdentifier}/${serverIdentity.libraryIdentifier}${episodeKey}`,
+      );
     }
 
     const body = await this.request(`/playQueues?${params.toString()}`, { method: "POST" });
@@ -354,9 +367,7 @@ export class PlexApi {
     };
 
     const directTargets =
-      client.connections && client.connections.length > 0
-        ? client.connections
-        : [];
+      client.connections && client.connections.length > 0 ? client.connections : [];
 
     if (directTargets.length > 0) {
       const directErrors = [];

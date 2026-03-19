@@ -32,7 +32,9 @@ async function main() {
     );
   }
 
-  console.log(`Using ${selected.length} client(s): ${selected.map((client) => client.title).join(", ")}`);
+  console.log(
+    `Using ${selected.length} client(s): ${selected.map((client) => client.title).join(", ")}`,
+  );
 
   const section = await plex.findLibrarySectionByName(config.library);
   const collection = await plex.findCollectionByName(section.key, config.collection);
@@ -41,7 +43,9 @@ async function main() {
   const collectionItems = await plex.getCollectionItems(collection.key);
   const { episodes: directEpisodes, showRatingKeys } = flattenEpisodes(collectionItems);
 
-  const showEpisodesArrays = await Promise.all(showRatingKeys.map((ratingKey) => plex.getShowEpisodes(ratingKey)));
+  const showEpisodesArrays = await Promise.all(
+    showRatingKeys.map((ratingKey) => plex.getShowEpisodes(ratingKey)),
+  );
   const episodes = [...directEpisodes, ...showEpisodesArrays.flat()];
 
   if (episodes.length === 0) {
@@ -70,7 +74,9 @@ async function main() {
         console.log(`OK: Playback started on ${client.title}`);
       } else {
         failures.push(`${client.title}: ${result.reason?.message || String(result.reason)}`);
-        console.error(`FAIL: ${client.title} -> ${result.reason?.message || String(result.reason)}`);
+        console.error(
+          `FAIL: ${client.title} -> ${result.reason?.message || String(result.reason)}`,
+        );
       }
     });
 
@@ -87,7 +93,9 @@ async function main() {
   let { successCount, failures } = await dispatchToClients(primaryQueueID);
 
   if (successCount === 0 && config.shuffleContinuous) {
-    console.warn("Shuffled continuous queue failed on all clients. Retrying with single-episode queue.");
+    console.warn(
+      "Shuffled continuous queue failed on all clients. Retrying with single-episode queue.",
+    );
     const fallbackQueueID = await plex.createPlayQueue(serverIdentity, {
       collectionKey: collection.key,
       episodeKey: episode.key,
