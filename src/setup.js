@@ -126,6 +126,11 @@ function resolveMultiOptions(value, options) {
 
   const resolved = [];
   for (const part of parts) {
+    if (part === "*") {
+      resolved.push(...options);
+      continue;
+    }
+
     const rangeMatch = part.match(/^(\d+)\s*-\s*(\d+)$/);
     if (rangeMatch) {
       const start = Number(rangeMatch[1]);
@@ -166,7 +171,7 @@ async function promptWithOptions(rl, label, fallback, options, { multi = false }
       if (resolved != null) return resolved;
       console.log(
         warn(
-          `Invalid selection. Enter client names, numbers, or ranges (for example: 1,3-5) from 1-${options.length}.`,
+          `Invalid selection. Enter client names, numbers, ranges (for example: 1,3-5), or * for all clients from 1-${options.length}.`,
         ),
       );
       continue;
@@ -299,7 +304,7 @@ async function main() {
     section("Playback Targets");
     values.PLEX_CLIENTS = await promptWithOptions(
       rl,
-      "Plex clients (comma-separated names/numbers/ranges)",
+      "Plex clients (comma-separated names/numbers/ranges or *)",
       defaults.PLEX_CLIENTS,
       clientOptions,
       { multi: true },

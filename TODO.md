@@ -3,7 +3,7 @@
 ## Interactive Setup
 
 - [ ] Add optional `--non-interactive` mode for CI/server environments.
-- [ ] Support selecting all clients with `*` at the clients prompt.
+- [x] Support selecting all clients with `*` at the clients prompt.
 - [ ] Persist last successful setup choices separately from `.env.example`.
 - [ ] Add setup unit tests for numeric, range, and mixed client input.
 
