@@ -24,9 +24,14 @@ Play a random episode from a Plex collection to one or more Plex clients.
    ```
 2. Create your env file:
    ```bash
-   cp .env.example .env
+   npm run setup
    ```
-3. Set `PLEX_CLIENTS` to one or more comma-separated hints.
+3. Follow the prompts and save the generated `.env`.
+
+Manual alternative:
+```bash
+cp .env.example .env
+```
 
 ## Run
 ```bash
