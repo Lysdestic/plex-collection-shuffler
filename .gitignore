@@ -1,0 +1,16 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Env and local state
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
