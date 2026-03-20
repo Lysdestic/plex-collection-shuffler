@@ -40,6 +40,19 @@ function sortedResourceConnections(device) {
   return scored.map((entry) => entry.connection.uri).filter(Boolean);
 }
 
+function uniqueNonEmpty(values) {
+  const out = [];
+  const seen = new Set();
+  for (const value of values) {
+    if (!value) continue;
+    const normalized = String(value).trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
 function parseXml(text) {
   return parser.parse(text);
 }
@@ -188,6 +201,63 @@ export class PlexApi {
         };
       })
       .filter((entry) => entry.machineIdentifier);
+  }
+
+  async getServerCommandTargets(serverMachineIdentifier) {
+    const defaultTarget = {
+      protocol: this.serverProtocol,
+      address: this.serverAddress,
+      port: String(this.serverPort),
+      source: "config",
+    };
+
+    const discoveredTargets = [];
+
+    try {
+      const body = await this.request(
+        "https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1",
+        { baseUrl: "https://plex.tv" },
+      );
+
+      const parsed = parseXml(body);
+      const devices = ensureArray(
+        parsed?.MediaContainer?.Device ??
+          parsed?.MediaContainer?.resource ??
+          parsed?.resources?.resource ??
+          parsed?.resources?.Device,
+      );
+
+      const serverDevice = devices.find((device) => {
+        const provides = String(device?.provides || "");
+        const machineId = device?.clientIdentifier || device?.machineIdentifier;
+        return provides.includes("server") && machineId === serverMachineIdentifier;
+      });
+
+      const connectionUris = sortedResourceConnections(serverDevice);
+      for (const uri of connectionUris) {
+        try {
+          const url = new URL(uri);
+          discoveredTargets.push({
+            protocol: url.protocol.replace(":", ""),
+            address: url.hostname,
+            port: url.port || (url.protocol === "https:" ? "443" : "80"),
+            source: "resource",
+          });
+        } catch {
+          // Ignore malformed resource connection URIs and keep fallback targets.
+        }
+      }
+    } catch {
+      // Ignore discovery failures and keep configured target.
+    }
+
+    const combined = [defaultTarget, ...discoveredTargets];
+    const unique = new Map();
+    for (const target of combined) {
+      const key = `${target.protocol}://${target.address}:${target.port}`;
+      if (!unique.has(key)) unique.set(key, target);
+    }
+    return [...unique.values()];
   }
 
   async listClients() {
@@ -342,24 +412,14 @@ export class PlexApi {
     return container.token || null;
   }
 
-  async playEpisodeOnClient(serverIdentity, client, episode, playQueueID, delegationToken = null) {
-    const params = new URLSearchParams({
-      commandID: String(this.nextCommandId()),
-      providerIdentifier: "com.plexapp.plugins.library",
-      machineIdentifier: serverIdentity.machineIdentifier,
-      protocol: this.serverProtocol,
-      address: this.serverAddress,
-      port: String(this.serverPort),
-      offset: "0",
-      key: episode.key,
-      type: "video",
-      containerKey: `/playQueues/${playQueueID}?window=100&own=1`,
-    });
-    if (delegationToken) {
-      params.set("token", delegationToken);
-    }
-
-    const commandPath = `/player/playback/playMedia?${params.toString()}`;
+  async playEpisodeOnClient(
+    serverIdentity,
+    client,
+    episode,
+    playQueueID,
+    delegationToken = null,
+    commandTargets = [],
+  ) {
     const proxyOptions = {
       headers: {
         "X-Plex-Target-Client-Identifier": client.machineIdentifier,
@@ -368,45 +428,95 @@ export class PlexApi {
 
     const directTargets =
       client.connections && client.connections.length > 0 ? client.connections : [];
+    const tokenCandidates = uniqueNonEmpty([client.accessToken, this.plexToken]);
 
-    if (directTargets.length > 0) {
-      const directErrors = [];
-      for (const target of directTargets) {
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          const directOptions = {
-            ...proxyOptions,
-            baseUrl: target,
-            token: client.accessToken || this.plexToken,
-          };
+    const resolvedCommandTargets =
+      commandTargets.length > 0
+        ? commandTargets
+        : [
+            {
+              protocol: this.serverProtocol,
+              address: this.serverAddress,
+              port: String(this.serverPort),
+              source: "config",
+            },
+          ];
 
-          try {
-            await this.request(commandPath, directOptions);
-            return;
-          } catch (directError) {
-            directErrors.push(directError);
-            if (!isNetworkError(directError) || attempt === 2) {
-              break;
-            }
-            await sleep(700);
-          }
-        }
+    const targetErrors = [];
+
+    for (const commandTarget of resolvedCommandTargets) {
+      const params = new URLSearchParams({
+        commandID: String(this.nextCommandId()),
+        providerIdentifier: "com.plexapp.plugins.library",
+        machineIdentifier: serverIdentity.machineIdentifier,
+        protocol: commandTarget.protocol,
+        address: commandTarget.address,
+        port: String(commandTarget.port),
+        offset: "0",
+        key: episode.key,
+        type: "video",
+        containerKey: `/playQueues/${playQueueID}?window=100&own=1`,
+      });
+      if (delegationToken) {
+        params.set("token", delegationToken);
       }
 
-      // As a last resort, retry through server proxy.
-      try {
-        await this.request(commandPath, proxyOptions);
-        return;
-      } catch (proxyError) {
-        const firstDirect = directErrors[0];
-        if (firstDirect) {
-          throw new Error(
-            `Direct playback failed (${firstDirect.message}); proxy playback failed (${proxyError.message})`,
+      const commandPath = `/player/playback/playMedia?${params.toString()}`;
+
+      if (directTargets.length > 0) {
+        const directErrors = [];
+        for (const target of directTargets) {
+          for (const tokenCandidate of tokenCandidates) {
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+              const directOptions = {
+                ...proxyOptions,
+                baseUrl: target,
+                token: tokenCandidate,
+              };
+
+              try {
+                await this.request(commandPath, directOptions);
+                return;
+              } catch (directError) {
+                directErrors.push(directError);
+                if (!isNetworkError(directError) || attempt === 2) {
+                  break;
+                }
+                await sleep(700);
+              }
+            }
+          }
+        }
+
+        try {
+          await this.request(commandPath, proxyOptions);
+          return;
+        } catch (proxyError) {
+          const firstDirect = directErrors[0];
+          if (firstDirect) {
+            targetErrors.push(
+              `${commandTarget.source} ${commandTarget.protocol}://${commandTarget.address}:${commandTarget.port} -> direct (${firstDirect.message}); proxy (${proxyError.message})`,
+            );
+          } else {
+            targetErrors.push(
+              `${commandTarget.source} ${commandTarget.protocol}://${commandTarget.address}:${commandTarget.port} -> proxy (${proxyError.message})`,
+            );
+          }
+        }
+      } else {
+        try {
+          await this.request(commandPath, proxyOptions);
+          return;
+        } catch (proxyError) {
+          targetErrors.push(
+            `${commandTarget.source} ${commandTarget.protocol}://${commandTarget.address}:${commandTarget.port} -> proxy (${proxyError.message})`,
           );
         }
-        throw proxyError;
       }
     }
 
-    await this.request(commandPath, proxyOptions);
+    throw new Error(
+      "Playback command failed for all server address targets. " + targetErrors.join(" | "),
+    );
   }
 }

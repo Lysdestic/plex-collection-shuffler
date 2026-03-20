@@ -26,6 +26,7 @@ export async function playRandomEpisode({ env = process.env, logger = console } 
 
   log.log("Connecting to Plex server...");
   const serverIdentity = await plex.getServerIdentity();
+  const commandTargets = await plex.getServerCommandTargets(serverIdentity.machineIdentifier);
 
   log.log("Discovering Plex clients...");
   const clients = await plex.listClients();
@@ -73,7 +74,14 @@ export async function playRandomEpisode({ env = process.env, logger = console } 
   async function dispatchToClients(playQueueID) {
     const results = await Promise.allSettled(
       selected.map((client) =>
-        plex.playEpisodeOnClient(serverIdentity, client, episode, playQueueID, delegationToken),
+        plex.playEpisodeOnClient(
+          serverIdentity,
+          client,
+          episode,
+          playQueueID,
+          delegationToken,
+          commandTargets,
+        ),
       ),
     );
 
