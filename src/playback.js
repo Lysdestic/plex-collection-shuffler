@@ -69,9 +69,14 @@ export async function playRandomEpisode({ env = process.env, logger = console } 
   const episodeLabel = formatEpisode(episode);
   log.log("Playing: " + episodeLabel);
 
-  const delegationToken = await plex.createDelegationToken();
+  let delegationToken = null;
+  try {
+    delegationToken = await plex.createDelegationToken();
+  } catch (error) {
+    log.warn("Could not create delegation token; continuing without it. " + error.message);
+  }
 
-  async function dispatchToClients(playQueueID) {
+  async function dispatchToClients(playQueueID, tokenOverride = delegationToken) {
     const results = await Promise.allSettled(
       selected.map((client) =>
         plex.playEpisodeOnClient(
@@ -79,7 +84,7 @@ export async function playRandomEpisode({ env = process.env, logger = console } 
           client,
           episode,
           playQueueID,
-          delegationToken,
+          tokenOverride,
           commandTargets,
         ),
       ),
@@ -104,6 +109,19 @@ export async function playRandomEpisode({ env = process.env, logger = console } 
     return { successCount, failures };
   }
 
+  async function dispatchWithTokenFallback(playQueueID) {
+    let { successCount, failures } = await dispatchToClients(playQueueID, delegationToken);
+    if (successCount > 0 || !delegationToken) {
+      return { successCount, failures };
+    }
+
+    log.warn(
+      "Playback failed with delegation token on all clients. Retrying same queue without delegation token.",
+    );
+    ({ successCount, failures } = await dispatchToClients(playQueueID, null));
+    return { successCount, failures };
+  }
+
   const primaryQueueID = await plex.createPlayQueue(serverIdentity, {
     collectionKey: collection.key,
     episodeKey: episode.key,
@@ -111,7 +129,7 @@ export async function playRandomEpisode({ env = process.env, logger = console } 
     shuffleContinuous: config.shuffleContinuous,
   });
 
-  let { successCount, failures } = await dispatchToClients(primaryQueueID);
+  let { successCount, failures } = await dispatchWithTokenFallback(primaryQueueID);
 
   if (successCount === 0 && config.shuffleContinuous) {
     log.warn(
@@ -123,7 +141,7 @@ export async function playRandomEpisode({ env = process.env, logger = console } 
       startEpisodeKey: episode.key,
       shuffleContinuous: false,
     });
-    ({ successCount, failures } = await dispatchToClients(fallbackQueueID));
+    ({ successCount, failures } = await dispatchWithTokenFallback(fallbackQueueID));
   }
 
   if (successCount === 0) {
